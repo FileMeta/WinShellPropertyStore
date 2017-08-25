@@ -419,11 +419,11 @@ namespace WinShell
     } // class PropertySystem
 
     /// <summary>
-    /// 
+    /// Wrapper class for IPropertyDescription. Provides information about a particular Windows
+    /// Property Store property.
     /// </summary>
     public class PropertyDescription
     {
-
         PROPERTYKEY m_propertyKey;
         string m_canonicalName;
         string m_displayName;
