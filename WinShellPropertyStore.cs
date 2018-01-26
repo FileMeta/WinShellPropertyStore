@@ -3,9 +3,9 @@
 name: WinShellPropertyStore.cs
 description: C# Wrapper for Windows Property System
 url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/WinShellPropertyStore.cs
-version: 1.2
+version: 1.3
 keywords: CodeBit
-dateModified: 2017-08-29
+dateModified: 2018-01-25
 license: http://unlicense.org
 # Metadata in MicroYaml format. See http://filemeta.org and http://schema.org
 ...
@@ -146,7 +146,7 @@ namespace WinShell
                 // managed DateTime format has a property that indicates whether the time is local or UTC.
                 // Callers should still take care to interpret the time as local to where the photo was taken
                 // and not local to where the computer is at present.
-                if (key.Equals(s_pkDateTaken))
+                if (key.Equals(s_pkDateTaken) && value != null)
                 {
                     DateTime dt = (DateTime)value;
                     Debug.Assert(dt.Kind == DateTimeKind.Utc);
@@ -196,6 +196,12 @@ namespace WinShell
             IntPtr pv = IntPtr.Zero;
             try
             {
+                if (value is DateTime)
+                {
+                    DateTime dt = (DateTime)value;
+                    value = dt.ToUniversalTime();
+                }
+
                 pv = PropertyStoreInterop.PropVariantFromObject(value);
                 m_IPropertyStore.SetValue(key, pv);
             }

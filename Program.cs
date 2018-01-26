@@ -40,7 +40,11 @@ namespace Tests
 
     class TestPropertyStore
     {
+        static PROPERTYKEY s_pkDateTaken = new PROPERTYKEY("14B81DA1-0135-4D31-96D9-6CBFC9671A99", 36867);
+
         const string c_SampleJpg = "sample.jpg";
+        const string c_sourceMp3 = "src.mp3";
+        const string c_sourceJpg = "src.jpg";
         string m_workingDirectory;
 
         public TestPropertyStore()
@@ -65,15 +69,17 @@ namespace Tests
             Console.WriteLine("Working directory: " + m_workingDirectory);
             Console.WriteLine();
 
-            DumpAllProperties(Path.Combine(m_workingDirectory, "src.mp3"));
+            DumpAllProperties(Path.Combine(m_workingDirectory, c_sourceMp3));
             Console.WriteLine();
-            DumpAllProperties(Path.Combine(m_workingDirectory, "src.jpg"));
+            DumpAllProperties(Path.Combine(m_workingDirectory, c_sourceJpg));
             Console.WriteLine();
 
             PerformCopyTest(".jpg");
             Console.WriteLine();
             PerformCopyTest(".mp3");
             Console.WriteLine();
+
+            PerformDateReadTest();
 
             //RetrieveAll();
         }
@@ -88,6 +94,30 @@ namespace Tests
             CopyAllProperties(srcFilename, dstFilename);
             Console.WriteLine();
             CompareProperties(srcFilename, dstFilename);
+        }
+
+        void PerformDateReadTest()
+        {
+            // Read date from image that has a date
+            using (var ps = PropertyStore.Open(Path.Combine(m_workingDirectory, c_sourceJpg)))
+            {
+                object value = ps.GetValue(s_pkDateTaken);
+                if (!(value is DateTime))
+                {
+                    throw new ApplicationException("Failed to read date from JPEG.");
+                }
+            }
+
+            // Attempt to read date from mp3 that does not have one.
+            using (var ps = PropertyStore.Open(Path.Combine(m_workingDirectory, c_sourceMp3)))
+            {
+                object value = ps.GetValue(s_pkDateTaken);
+                if (value != null)
+                {
+                    throw new ApplicationException("Date read succeeded when it should have returned null.");
+                }
+            }
+            Console.WriteLine("Date tests succeeded.");
         }
 
         /// <summary>
