@@ -3,15 +3,17 @@
 name: WinShellPropertyStore.cs
 description: C# Wrapper for Windows Property System
 url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/WinShellPropertyStore.cs
-version: 1.3
+version: 1.4
 keywords: CodeBit
-dateModified: 2018-01-25
+dateModified: 2018-01-29
 license: http://unlicense.org
 # Metadata in MicroYaml format. See http://filemeta.org and http://schema.org
 ...
 */
 
 /*
+Unlicense: http://unlicense.org
+
 This is free and unencumbered software released into the public domain.
 
 Anyone is free to copy, modify, publish, use, compile, sell, or distribute
@@ -75,7 +77,7 @@ namespace WinShell
         {
             PropertyStoreInterop.IPropertyStore store;
             Guid iPropertyStoreGuid = typeof(PropertyStoreInterop.IPropertyStore).GUID;
-            PropertyStoreInterop.SHGetPropertyStoreFromParsingName(filename, (IntPtr)0,
+            PropertyStoreInterop.SHGetPropertyStoreFromParsingName(filename, IntPtr.Zero,
                 writeAccess ? PropertyStoreInterop.GETPROPERTYSTOREFLAGS.GPS_READWRITE : PropertyStoreInterop.GETPROPERTYSTOREFLAGS.GPS_BESTEFFORT,
                 ref iPropertyStoreGuid, out store);
             return new PropertyStore(store);
@@ -132,7 +134,7 @@ namespace WinShell
             object value = null;
             try
             {
-                pv = Marshal.AllocCoTaskMem(16);
+                pv = Marshal.AllocCoTaskMem(32); // Structure is 16 bytes in 32-bit windows and 24 bytes in 64-bit but we leave a few more bytes for good measure.
                 m_IPropertyStore.GetValue(key, pv);
                 value = PropertyStoreInterop.PropVariantToObject(pv);
 
@@ -156,7 +158,7 @@ namespace WinShell
             }
             finally
             {
-                if (pv != (IntPtr)0)
+                if (pv != IntPtr.Zero)
                 {
                     try
                     {
@@ -309,17 +311,14 @@ namespace WinShell
         /// <returns>A <see cref="PropertyDescription"/>. Null if the PROPERTYKEY does not have a registered description.</returns>
         public PropertyDescription GetPropertyDescription(PROPERTYKEY propKey)
         {
+            Int32 hResult;
             Guid IID_IPropertyDescription = typeof(PropertyStoreInterop.IPropertyDescription).GUID;
             PropertyStoreInterop.IPropertyDescription iPropertyDescription = null;
             try
             {
-                m_IPropertySystem.GetPropertyDescription(propKey, ref IID_IPropertyDescription, out iPropertyDescription);
+                hResult = m_IPropertySystem.GetPropertyDescription(propKey, ref IID_IPropertyDescription, out iPropertyDescription);
+                if (hResult < 0) return null;
                 return new PropertyDescription(iPropertyDescription);
-            }
-            catch (Exception err)
-            {
-                Debug.WriteLine("GetPropertyDescription Error: " + err.ToString());
-                return null;
             }
             finally
             {
@@ -344,11 +343,16 @@ namespace WinShell
         /// </remarks>
         public PropertyDescription GetPropertyDescriptionByName(string canonicalName)
         {
+            Int32 hResult;
             Guid IID_IPropertyDescription = typeof(PropertyStoreInterop.IPropertyDescription).GUID;
             PropertyStoreInterop.IPropertyDescription iPropertyDescription = null;
             try
             {
-                m_IPropertySystem.GetPropertyDescriptionByName(canonicalName, ref IID_IPropertyDescription, out iPropertyDescription);
+                hResult = m_IPropertySystem.GetPropertyDescriptionByName(canonicalName, ref IID_IPropertyDescription, out iPropertyDescription);
+                if (hResult < 0)
+                {
+                    return null;
+                }
                 return new PropertyDescription(iPropertyDescription);
             }
             finally
@@ -363,14 +367,23 @@ namespace WinShell
 
         public PROPERTYKEY GetPropertyKeyByName(string canonicalName)
         {
+            Int32 hResult;
             PROPERTYKEY propertyKey;    // Initializes automatically to all zeros
 
             Guid IID_IPropertyDescription = typeof(PropertyStoreInterop.IPropertyDescription).GUID;
             PropertyStoreInterop.IPropertyDescription iPropertyDescription = null;
             try
             {
-                m_IPropertySystem.GetPropertyDescriptionByName(canonicalName, ref IID_IPropertyDescription, out iPropertyDescription);
-                iPropertyDescription.GetPropertyKey(out propertyKey);
+                hResult = m_IPropertySystem.GetPropertyDescriptionByName(canonicalName, ref IID_IPropertyDescription, out iPropertyDescription);
+                if (hResult < 0)
+                {
+                    Marshal.ThrowExceptionForHR(hResult);
+                }
+                hResult = iPropertyDescription.GetPropertyKey(out propertyKey);
+                if (hResult < 0)
+                {
+                    Marshal.ThrowExceptionForHR(hResult);
+                }
             }
             finally
             {
@@ -471,7 +484,7 @@ namespace WinShell
             }
 
             // Get Canonical Name
-            IntPtr pszName = (IntPtr)0;
+            IntPtr pszName = IntPtr.Zero;
             try
             {
                 hResult = iPropertyDescription.GetCanonicalName(out pszName);
@@ -486,15 +499,15 @@ namespace WinShell
             }
             finally
             {
-                if (pszName != (IntPtr)0)
+                if (pszName != IntPtr.Zero)
                 {
                     Marshal.FreeCoTaskMem(pszName);
-                    pszName = (IntPtr)0;
+                    pszName = IntPtr.Zero;
                 }
             }
 
             // Get Display Name
-            pszName = (IntPtr)0;
+            pszName = IntPtr.Zero;
             try
             {
                 hResult = iPropertyDescription.GetDisplayName(out pszName);
@@ -509,10 +522,10 @@ namespace WinShell
             }
             finally
             {
-                if (pszName != (IntPtr)0)
+                if (pszName != IntPtr.Zero)
                 {
                     Marshal.FreeCoTaskMem(pszName);
-                    pszName = (IntPtr)0;
+                    pszName = IntPtr.Zero;
                 }
             }
 
@@ -991,9 +1004,11 @@ namespace WinShell
         [ComImport, Guid("ca724e8a-c3e6-442b-88a4-6fb0db8035a3"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         public interface IPropertySystem
         {
-            void GetPropertyDescription([In] ref PROPERTYKEY propkey, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
+            [PreserveSig]
+            Int32 GetPropertyDescription([In] ref PROPERTYKEY propkey, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
 
-            void GetPropertyDescriptionByName([In][MarshalAs(UnmanagedType.LPWStr)] string pszCanonicalName, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
+            [PreserveSig]
+            Int32 GetPropertyDescriptionByName([In][MarshalAs(UnmanagedType.LPWStr)] string pszCanonicalName, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
 
             // === All Other Methods Deferred Until Later! ===
         }
@@ -1145,7 +1160,14 @@ namespace WinShell
             [FieldOffset(8)]
             public uint cElems;
             [FieldOffset(12)]
-            public IntPtr pElems;
+            public IntPtr pElems32;
+            [FieldOffset(16)]
+            public IntPtr pElems64;
+
+            public IntPtr pElems
+            {
+                get { return (IntPtr.Size == 4) ? pElems32 : pElems64; }
+            }
         }
 
         [Flags]
@@ -1454,7 +1476,7 @@ namespace WinShell
                         string[] strings = new string[v.cElems];
                         for (int i = 0; i < v.cElems; ++i)
                         {
-                            IntPtr strPtr = Marshal.ReadIntPtr(v.pElems + i * Marshal.SizeOf(typeof(IntPtr)));
+                            IntPtr strPtr = Marshal.ReadIntPtr(v.pElems + i * IntPtr.Size);
                             strings[i] = Marshal.PtrToStringAnsi(strPtr);
                         }
                         value = strings;
@@ -1466,7 +1488,7 @@ namespace WinShell
                         string[] strings = new string[v.cElems];
                         for (int i = 0; i < v.cElems; ++i)
                         {
-                            IntPtr strPtr = Marshal.ReadIntPtr(v.pElems + i * Marshal.SizeOf(typeof(IntPtr)));
+                            IntPtr strPtr = Marshal.ReadIntPtr(v.pElems + i * IntPtr.Size);
                             strings[i] = Marshal.PtrToStringUni(strPtr);
                         }
                         value = strings;

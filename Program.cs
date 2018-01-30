@@ -45,6 +45,7 @@ namespace Tests
         const string c_SampleJpg = "sample.jpg";
         const string c_sourceMp3 = "src.mp3";
         const string c_sourceJpg = "src.jpg";
+        const string c_sourceMp4 = "src.mp4";
         string m_workingDirectory;
 
         public TestPropertyStore()
@@ -64,8 +65,12 @@ namespace Tests
             }
         }
 
+        static WinShell.PROPERTYKEY s_pkKeywords = new WinShell.PROPERTYKEY("F29F85E0-4FF9-1068-AB91-08002B27B3D9", 5); // System.Keywords
+
         public void PerformTests()
         {
+            Console.WriteLine($"Testing in {IntPtr.Size*8} bit configuration.");
+
             Console.WriteLine("Working directory: " + m_workingDirectory);
             Console.WriteLine();
 
@@ -73,15 +78,20 @@ namespace Tests
             Console.WriteLine();
             DumpAllProperties(Path.Combine(m_workingDirectory, c_sourceJpg));
             Console.WriteLine();
+            DumpAllProperties(Path.Combine(m_workingDirectory, c_sourceMp4));
+            Console.WriteLine();
 
             PerformCopyTest(".jpg");
             Console.WriteLine();
             PerformCopyTest(".mp3");
             Console.WriteLine();
+            PerformCopyTest(".mp4");
+            Console.WriteLine();
 
             PerformDateReadTest();
 
-            //RetrieveAll();
+            Console.WriteLine($"Tests succeeded in {IntPtr.Size * 8} bit configuration.");
+            Console.WriteLine($"Be sure to test in {(IntPtr.Size == 4 ? "64" : "32")} bit configuration.");
         }
 
         void PerformCopyTest(string ext)
