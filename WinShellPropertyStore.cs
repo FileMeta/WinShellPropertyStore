@@ -3,9 +3,9 @@
 name: WinShellPropertyStore.cs
 description: C# Wrapper for Windows Property System
 url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/WinShellPropertyStore.cs
-version: 1.5
+version: 1.6
 keywords: CodeBit
-dateModified: 2018-12-09
+dateModified: 2018-12-13
 license: http://unlicense.org
 # Metadata in MicroYaml format. See http://filemeta.org and http://schema.org
 ...
@@ -160,10 +160,11 @@ namespace WinShell
                 // managed DateTime format has a property that indicates whether the time is local or UTC.
                 // Callers should still take care to interpret the time as local to where the photo was taken
                 // and not local to where the computer is at present.
-                if ((string.Equals(m_contentType, "image/jpeg")
+                if (value != null
+                    && ((string.Equals(m_contentType, "image/jpeg")
                         && (key.Equals(s_pkItemDate) || key.Equals(s_pkDateTaken)))
                     || (string.Equals(m_contentType, "video/avi")
-                        && (key.Equals(s_pkItemDate) || key.Equals(s_pkDateEncoded))))
+                        && (key.Equals(s_pkItemDate) || key.Equals(s_pkDateEncoded)))))
                 {
                     DateTime dt = (DateTime)value;
                     Debug.Assert(dt.Kind == DateTimeKind.Utc);
