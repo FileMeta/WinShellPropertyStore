@@ -3,9 +3,9 @@
 name: PropVariant.cs
 description: Managed Code Interoperability for PROPVARIANT - extends existing support for VARIANT
 url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/PropVariant.cs
-version: 1.1
+version: 1.2
 keywords: CodeBit
-dateModified: 2019-04-09
+dateModified: 2019-04-10
 license: http://unlicense.org
 # Metadata in MicroYaml format. See http://filemeta.org and http://schema.org
 ...
@@ -51,7 +51,23 @@ namespace Interop
 
     internal static class PropVariant
     {
-        public const int sizeofPROPVARIANT = 16;
+        /* C++ version
+        typedef struct PROPVARIANT {
+            VARTYPE vt;
+            WORD    wReserved1;
+            WORD    wReserved2;
+            WORD    wReserved3;
+            union {
+                // Various types of up to 8 bytes in 32-bit mode and 16 bytes in 64-bit mode
+            } data;
+        } PROPVARIANT;
+        */
+
+        public static readonly int sizeofPROPVARIANT = 8 + 2 * IntPtr.Size;
+        const int offsetofPROPVARIANT_vt = 0;
+        const int offsetofPROPVARIANT_data = 8;
+        const int offsetofPROPVARIANT_cElems = 8;
+        static readonly int offsetofPROPVARIANT_pElems = 8 + IntPtr.Size;
 
         /// <summary>
         /// Initialize a VARIANT or PROPVARIANT structure to all zeros.
@@ -61,7 +77,26 @@ namespace Interop
         {
             Marshal.WriteInt64(pVariant, 0);
             Marshal.WriteInt64(pVariant, 8, 0);
+            if (sizeofPROPVARIANT > 16)
+            {
+                Marshal.WriteInt64(pVariant, 16, 0);
+            }
         }
+
+        /// <summary>
+        /// Initialize a VARIANT or PROPVARIANT structure to a vt with zero data
+        /// </summary>
+        /// <param name="pVariant">Address of the variant to initialize.</param>
+        private static void PropVariantInit(IntPtr pVariant, VT vt)
+        {
+            Marshal.WriteInt64(pVariant, (Int16)vt);    // Writes the VT into the first 16 bits and clears the remaining 48 bits to zero
+            Marshal.WriteInt64(pVariant, 8, 0);
+            if (sizeofPROPVARIANT > 16)
+            {
+                Marshal.WriteInt64(pVariant, 16, 0);
+            }
+        }
+
 
         /// <summary>
         /// Converts a string to a PropVariant with type LPSTR instead of BSTR.
@@ -74,20 +109,9 @@ namespace Interop
         /// </remarks>
         public static void GetPropVariantLPWSTR(string value, IntPtr pVariant)
         {
-            var propvariant = new PROPVARIANT();  // Automatically initializes to all zeros
-            propvariant.vt = VT.LPWSTR; // VT_LPWSTR - not documented but this is to be allocated using CoTaskMemAlloc.
-            propvariant.dataIntPtr = Marshal.StringToCoTaskMemUni(value);
-            Marshal.StructureToPtr(propvariant, pVariant, false);
-        }
-
-        /* Alternative method is very slightly slower
-        public static void GetPropVariantLPWSTR(string value, IntPtr pVariant)
-        {
-            PropVariantInit(pVariant);
-            Marshal.WriteInt64(pVariant, (Int16)VT.LPWSTR);
+            PropVariantInit(pVariant, VT.LPWSTR);
             Marshal.WriteIntPtr(pVariant, offsetofPROPVARIANT_data, Marshal.StringToCoTaskMemUni(value));
         }
-        */
 
         /// <summary>
         /// Converts a <see cref="DateTime"/> to a PropVariant with type FILETIME instead of DATETIME.
@@ -99,10 +123,8 @@ namespace Interop
         /// </remarks>
         public static void GetPropVariantFILETIME(DateTime value, IntPtr pVariant)
         {
-            var v = new PROPVARIANT();  // Automatically initializes to all zeros
-            v.vt = VT.FILETIME;
-            v.dataInt64 = value.ToFileTimeUtc();
-            Marshal.StructureToPtr(v, pVariant, false);
+            PropVariantInit(pVariant, VT.FILETIME);
+            Marshal.WriteInt64(pVariant, offsetofPROPVARIANT_data, value.ToFileTimeUtc());
         }
 
         /// <summary>
@@ -130,10 +152,10 @@ namespace Interop
 
         public static object GetObjectFromPropVariant(IntPtr pv)
         {
-            var v = Marshal.PtrToStructure<PROPVARIANT>(pv);
+            var vt = (VT)Marshal.ReadInt16(pv);
 
             object value = null;
-            switch (v.vt)
+            switch (vt)
             {
                 case VT.EMPTY:
                 case VT.NULL: // VT_NULL
@@ -161,25 +183,26 @@ namespace Interop
                     break;
 
                 case VT.LPSTR: // VT_LPSTR
-                    value = Marshal.PtrToStringAnsi(v.dataIntPtr);
+                    value = Marshal.PtrToStringAnsi(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_data));
                     break;
 
                 case VT.LPWSTR: // VT_LPWSTR
-                    value = Marshal.PtrToStringUni(v.dataIntPtr);
+                    value = Marshal.PtrToStringUni(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_data));
                     break;
 
                 case VT.FILETIME: // VT_FILETIME
-                    value = DateTime.FromFileTimeUtc(v.dataInt64);
+                    value = DateTime.FromFileTimeUtc(Marshal.ReadInt64(pv, offsetofPROPVARIANT_data));
                     break;
 
                 case VT.CLSID: // VT_CLSID
-                    value = Marshal.PtrToStructure<Guid>(v.dataIntPtr);
+                    value = Marshal.PtrToStructure<Guid>(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_data));
                     break;
 
                 case VT.VECTOR|VT.I2: // VT_VECTOR|VT_I2
                     {
-                        Int16[] a = new Int16[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, v.cElems);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        Int16[] a = new Int16[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
                         value = a;
                     }
                     break;
@@ -187,44 +210,48 @@ namespace Interop
                 case VT.VECTOR|VT.I4: // VT_VECTOR|VT_I4
                 case VT.VECTOR|VT.INT: // VT_VECTOR|VT_INT
                     {
-                        Int32[] a = new Int32[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, v.cElems);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        Int32[] a = new Int32[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
                         value = a;
                     }
                     break;
 
                 case VT.VECTOR|VT.R4: // VT_VECTOR|VT_R4
                     {
-                        float[] a = new float[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        float[] a = new float[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
                         value = a;
                     }
                     break;
 
                 case VT.VECTOR|VT.I1: // VT_VECTOR|VT_I1
                     {
-                        byte[] a = new byte[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
-                        SByte[] b = new SByte[v.cElems];
-                        Buffer.BlockCopy(a, 0, b, 0, (int)v.cElems);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        byte[] a = new byte[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
+                        SByte[] b = new SByte[cElems];
+                        Buffer.BlockCopy(a, 0, b, 0, cElems);
                         value = b;
                     }
                     break;
 
                 case VT.VECTOR|VT.UI1: // VT_VECTOR|VT_UI1
                     {
-                        byte[] a = new byte[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
-                        value = a;
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        byte[] a = new byte[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
                     }
                     break;
 
                 case VT.VECTOR|VT.UI2: // VT_VECTOR|VT_UI2
                     {
-                        Int16[] a = new Int16[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
-                        UInt16[] b = new UInt16[v.cElems];
-                        Buffer.BlockCopy(a, 0, b, 0, (int)v.cElems * 2);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        Int16[] a = new Int16[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
+                        UInt16[] b = new UInt16[cElems];
+                        Buffer.BlockCopy(a, 0, b, 0, cElems * 2);
                         value = b;
                     }
                     break;
@@ -232,46 +259,52 @@ namespace Interop
                 case VT.VECTOR|VT.UI4: // VT_VECTOR|VT_UI4
                 case VT.VECTOR|VT.UINT: // VT_VECTOR|VT_UINT
                     {
-                        Int32[] a = new Int32[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
-                        UInt32[] b = new UInt32[v.cElems];
-                        Buffer.BlockCopy(a, 0, b, 0, (int)v.cElems * 4);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        Int32[] a = new Int32[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
+                        UInt32[] b = new UInt32[cElems];
+                        Buffer.BlockCopy(a, 0, b, 0, (int)cElems * 4);
                         value = b;
                     }
                     break;
 
                 case VT.VECTOR|VT.I8: // VT_VECTOR|VT_I8
                     {
-                        Int64[] a = new Int64[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        Int64[] a = new Int64[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
                         value = a;
                     }
                     break;
 
                 case VT.VECTOR|VT.UI8: // VT_VECTOR|VT_UI8
                     {
-                        Int64[] a = new Int64[v.cElems];
-                        Marshal.Copy(v.pElems, a, 0, (int)v.cElems);
-                        UInt64[] b = new UInt64[v.cElems];
-                        Buffer.BlockCopy(a, 0, b, 0, (int)v.cElems * 8);
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        Int64[] a = new Int64[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
+                        UInt64[] b = new UInt64[cElems];
+                        Buffer.BlockCopy(a, 0, b, 0, cElems * 8);
                         value = b;
                     }
                     break;
 
                 case VT.VECTOR|VT.R8: // VT_VECTOR|VT_R8
                     {
-                        double[] doubles = new double[v.cElems];
-                        Marshal.Copy(v.pElems, doubles, 0, (int)v.cElems);
-                        value = doubles;
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        double[] a = new double[cElems];
+                        Marshal.Copy(Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems), a, 0, cElems);
+                        value = a;
                     }
                     break;
 
                 case VT.VECTOR|VT.LPSTR: // VT_VECTOR|VT_LPSTR (Used by unnamed properties on .potx and .dotx files)
                     {
-                        string[] strings = new string[v.cElems];
-                        for (int i = 0; i < v.cElems; ++i)
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        IntPtr pElems = Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems);
+                        string[] strings = new string[cElems];
+                        for (int i = 0; i < cElems; ++i)
                         {
-                            strings[i] = Marshal.PtrToStringAnsi(Marshal.ReadIntPtr(v.pElems, i * IntPtr.Size));
+                            strings[i] = Marshal.PtrToStringAnsi(Marshal.ReadIntPtr(pElems, i * IntPtr.Size));
                         }
                         value = strings;
                     }
@@ -279,10 +312,12 @@ namespace Interop
 
                 case VT.VECTOR|VT.LPWSTR: // VT_VECTOR|VT_LPWSTR
                     {
-                        string[] strings = new string[v.cElems];
-                        for (int i = 0; i < v.cElems; ++i)
+                        int cElems = (int)Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_cElems);
+                        IntPtr pElems = Marshal.ReadIntPtr(pv, offsetofPROPVARIANT_pElems);
+                        string[] strings = new string[cElems];
+                        for (int i = 0; i < cElems; ++i)
                         {
-                            strings[i] = Marshal.PtrToStringUni(Marshal.ReadIntPtr(v.pElems, i * IntPtr.Size));
+                            strings[i] = Marshal.PtrToStringUni(Marshal.ReadIntPtr(pElems, i * IntPtr.Size));
                         }
                         value = strings;
                     }
@@ -295,16 +330,16 @@ namespace Interop
                     {
                         value = Marshal.GetObjectForNativeVariant(pv);
                         if (value == null) value = "(null)";
-                        value = String.Format("(Supported type 0x{0:x4}): {1}", v.vt, value.ToString());
+                        value = String.Format("(Supported type 0x{0:x4}): {1}", vt, value.ToString());
                     }
                     catch
                     {
-                        throw new NotImplementedException(string.Format($"Conversion of PROPVARIANT type VT_{v.vt} is not yet supported."));
+                        throw new NotImplementedException(string.Format($"Conversion of PROPVARIANT type VT_{vt} is not yet supported."));
                     }
 
-                    throw new NotImplementedException(string.Format($"Conversion of PROPVARIANT type VT_{v.vt} is not yet supported but Marshal.GetObjectForNativeVariant seems to work."));
+                    throw new NotImplementedException(string.Format($"Conversion of PROPVARIANT type VT_{vt} is not yet supported but Marshal.GetObjectForNativeVariant seems to work."));
 #else
-                    throw new NotImplementedException(string.Format($"Conversion of PROPVARIANT type VT_{v.vt} is not yet supported."));
+                    throw new NotImplementedException(string.Format($"Conversion of PROPVARIANT type VT_{vt} is not yet supported."));
 #endif
             }
 
@@ -312,63 +347,6 @@ namespace Interop
         } // Method PropVariantToObject
 
         // Reference: https://msdn.microsoft.com/en-us/library/windows/desktop/aa380072(v=vs.85).aspx
-
-        /*
-        // C++ version
-        typedef struct PROPVARIANT {
-            VARTYPE vt;
-            WORD    wReserved1;
-            WORD    wReserved2;
-            WORD    wReserved3;
-            union {
-                // Various types of up to 8 bytes
-            } data;
-        } PROPVARIANT;
-        */
-
-        const int offsetofPROPVARIANT_vt = 0;
-        const int offsetofPROPVARIANT_wReserved1 = 2;
-        const int offsetofPROPVARIANT_wReserved2 = 4;
-        const int offsetofPROPVARINAT_wReserved2 = 6;
-        const int offsetofPROPVARIANT_data = 8;
-
-        [StructLayout(LayoutKind.Explicit)]
-        private struct PROPVARIANT
-        {
-            [FieldOffset(0)]
-            public VT vt;
-            [FieldOffset(2)]
-            public ushort wReserved1;
-            [FieldOffset(4)]
-            public ushort wReserved2;
-            [FieldOffset(6)]
-            public ushort wReserved3;
-            [FieldOffset(8)]
-            public Int32 data01;
-            [FieldOffset(12)]
-            public Int32 data02;
-
-            // IntPtr (for strings and the like)
-            [FieldOffset(8)]
-            public IntPtr dataIntPtr;
-
-            // For FileTime and Int64
-            [FieldOffset(8)]
-            public long dataInt64;
-
-            // Vector-style arrays (for VT_VECTOR|VT_LPWSTR and such)
-            [FieldOffset(8)]
-            public int cElems;
-            [FieldOffset(12)]
-            public IntPtr pElems32;
-            [FieldOffset(16)]
-            public IntPtr pElems64;
-
-            public IntPtr pElems
-            {
-                get { return (IntPtr.Size == 4) ? pElems32 : pElems64; }
-            }
-        }
 
         [DllImport(@"ole32.dll", SetLastError = true, CallingConvention = CallingConvention.StdCall, PreserveSig = false)]
         public static extern void PropVariantClear([In] IntPtr pvarg);
