@@ -2,7 +2,7 @@
 ---
 name: PropKey.cs
 description: Managed Code Interoperability for PROPKEY
-url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/PropKey.cs
+url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/PropertyKey.cs
 version: 1.0
 keywords: CodeBit
 dateModified: 2019-04-09
