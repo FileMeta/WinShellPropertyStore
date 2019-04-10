@@ -11,6 +11,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using WinShell;
+using Interop;
 
 namespace Tests
 {
@@ -40,7 +41,7 @@ namespace Tests
 
     class TestPropertyStore
     {
-        static PROPERTYKEY s_pkDateTaken = new PROPERTYKEY("14B81DA1-0135-4D31-96D9-6CBFC9671A99", 36867);
+        static PropertyKey s_pkDateTaken = new PropertyKey("14B81DA1-0135-4D31-96D9-6CBFC9671A99", 36867);
 
         const string c_SampleJpg = "sample.jpg";
         const string c_sourceMp3 = "src.mp3";
@@ -65,7 +66,7 @@ namespace Tests
             }
         }
 
-        static WinShell.PROPERTYKEY s_pkKeywords = new WinShell.PROPERTYKEY("F29F85E0-4FF9-1068-AB91-08002B27B3D9", 5); // System.Keywords
+        static PropertyKey s_pkKeywords = new PropertyKey("F29F85E0-4FF9-1068-AB91-08002B27B3D9", 5); // System.Keywords
 
         public void PerformTests()
         {
@@ -148,7 +149,7 @@ namespace Tests
                     for (int i=0; i< count; ++i)
                     {
                         // Get the key for the enumerated property
-                        PROPERTYKEY propKey = propStore.GetAt(i);
+                        PropertyKey propKey = propStore.GetAt(i);
 
                         // Get the description from the property store (if available)
                         var desc = propSys.GetPropertyDescription(propKey);
@@ -175,7 +176,7 @@ namespace Tests
                         }
                         else
                         {
-                            name = string.Format("{0}, {1}", propKey.fmtid, propKey.pid);
+                            name = string.Format("{0}, {1}", propKey.PropSetId, propKey.PropertyId);
                         }
 
                         // Add to the list
@@ -238,7 +239,7 @@ namespace Tests
                         for (int i = 0; i < count; ++i)
                         {
                             // Get the key for the enumerated property
-                            PROPERTYKEY propKey = srcPs.GetAt(i);
+                            PropertyKey propKey = srcPs.GetAt(i);
 
                             // Get the description from the property store (if available)
                             var desc = propSys.GetPropertyDescription(propKey);
@@ -306,7 +307,7 @@ namespace Tests
                         for (int i = 0; i < count; ++i)
                         {
                             // Get the key for the enumerated property
-                            PROPERTYKEY propKey = srcPs.GetAt(i);
+                            PropertyKey propKey = srcPs.GetAt(i);
 
                             // Get the description from the property store (if available)
                             var desc = propSys.GetPropertyDescription(propKey);
@@ -403,9 +404,9 @@ namespace Tests
 
         PropertySystem m_ps = null;
         TextWriter m_log = null;
-        HashSet<PROPERTYKEY> m_foundKeys = null;
-        HashSet<PROPERTYKEY> m_errorKeys = null;
-        HashSet<PROPERTYKEY> m_typematchKeys = null;
+        HashSet<PropertyKey> m_foundKeys = null;
+        HashSet<PropertyKey> m_errorKeys = null;
+        HashSet<PropertyKey> m_typematchKeys = null;
 
         void RetrieveAll()
         {
@@ -413,9 +414,9 @@ namespace Tests
             {
                 m_ps = new PropertySystem();
                 m_log = new StreamWriter(Path.Combine(m_workingDirectory, "testLog.txt"), false);
-                m_foundKeys = new HashSet<PROPERTYKEY>();
-                m_errorKeys = new HashSet<PROPERTYKEY>();
-                m_typematchKeys = new HashSet<PROPERTYKEY>();
+                m_foundKeys = new HashSet<PropertyKey>();
+                m_errorKeys = new HashSet<PropertyKey>();
+                m_typematchKeys = new HashSet<PropertyKey>();
 
                 RetrieveAll(@"C:\");
             }
@@ -464,7 +465,7 @@ namespace Tests
                             int count = propStore.Count;
                             for (int i = 0; i < propStore.Count; ++i)
                             {
-                                PROPERTYKEY propKey;
+                                PropertyKey propKey;
                                 try
                                 {
                                     // Get the key for the enumerated property

@@ -51,6 +51,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Interop;
 
 namespace WinShell
 {
@@ -69,10 +70,10 @@ namespace WinShell
     {
 
 #if !RAW_PROPERTY_STORE
-        static PROPERTYKEY s_pkContentType = new PROPERTYKEY("D5CDD502-2E9C-101B-9397-08002B2CF9AE", 26); // System.ContentType
-        static PROPERTYKEY s_pkItemDate = new PROPERTYKEY("f7db74b4-4287-4103-afba-f1b13dcd75cf", 100); // System.ItemDate
-        static PROPERTYKEY s_pkDateTaken = new PROPERTYKEY("14B81DA1-0135-4D31-96D9-6CBFC9671A99", 36867);
-        static PROPERTYKEY s_pkDateEncoded = new PROPERTYKEY("2e4b640d-5019-46d8-8881-55414cc5caa0", 100); // System.Media.DateEncoded
+        static PropertyKey s_pkContentType = new PropertyKey("D5CDD502-2E9C-101B-9397-08002B2CF9AE", 26); // System.ContentType
+        static PropertyKey s_pkItemDate = new PropertyKey("f7db74b4-4287-4103-afba-f1b13dcd75cf", 100); // System.ItemDate
+        static PropertyKey s_pkDateTaken = new PropertyKey("14B81DA1-0135-4D31-96D9-6CBFC9671A99", 36867);
+        static PropertyKey s_pkDateEncoded = new PropertyKey("2e4b640d-5019-46d8-8881-55414cc5caa0", 100); // System.Media.DateEncoded
 #endif
 
         /// <summary>
@@ -122,15 +123,15 @@ namespace WinShell
         /// Gets a property key from an item's array of properties.
         /// </summary>
         /// <param name="index">The index of the property key in the property store's
-        /// array of <see cref="PROPERTYKEY"/> structures. This is a zero-based index.</param>
-        /// <returns>The <see cref="PROPERTYKEY"/> at the specified index.</returns>
+        /// array of <see cref="PropertyKey"/> structures. This is a zero-based index.</param>
+        /// <returns>The <see cref="PropertyKey"/> at the specified index.</returns>
         /// <remarks>
         /// This call, in combination with the <see cref="Count"/> property can be
         /// used to enumerate all properties in the PropertyStore.
         /// </remarks>
-        public PROPERTYKEY GetAt(int index)
+        public PropertyKey GetAt(int index)
         {
-            PROPERTYKEY key;
+            PropertyKey key;
             m_IPropertyStore.GetAt((uint)index, out key);
             return key;
         }
@@ -138,9 +139,9 @@ namespace WinShell
         /// <summary>
         /// Gets data for a specific property.
         /// </summary>
-        /// <param name="key">The <see cref="PROPERTYKEY"/> of the property to be retrieved.</param>
+        /// <param name="key">The <see cref="PropertyKey"/> of the property to be retrieved.</param>
         /// <returns>The data for the specified property or null if the item does not have the property.</returns>
-        public object GetValue(PROPERTYKEY key)
+        public object GetValue(PropertyKey key)
         {
             IntPtr pv = IntPtr.Zero;
             object value = null;
@@ -194,7 +195,7 @@ namespace WinShell
         /// <summary>
         /// Sets a new property value, or replaces or removes an existing value.
         /// </summary>
-        /// <param name="key">The <see cref="PROPERTYKEY"/> of the property to be set.</param>
+        /// <param name="key">The <see cref="PropertyKey"/> of the property to be set.</param>
         /// <param name="value">The value to be set. Managed code values are converted
         /// to the appropriate PROPVARIANT values.</param>
         /// <remarks>
@@ -209,7 +210,7 @@ namespace WinShell
         /// <para>Removal of a property is not supported by the Windows Property System.
         /// </para>
         /// </remarks>
-        public void SetValue(PROPERTYKEY key, object value)
+        public void SetValue(PropertyKey key, object value)
         {
             IntPtr pv = IntPtr.Zero;
             try
@@ -234,7 +235,7 @@ namespace WinShell
             }
         }
 
-        public bool IsPropertyWriteable(PROPERTYKEY key)
+        public bool IsPropertyWriteable(PropertyKey key)
         {
             if (m_IPropertyStoreCapabilities == null)
             {
@@ -321,11 +322,11 @@ namespace WinShell
         }
 
         /// <summary>
-        /// Get the <see cref="PropertyDescription"/> for a particular <see cref="PROPERTYKEY"/>.
+        /// Get the <see cref="PropertyDescription"/> for a particular <see cref="PropertyKey"/>.
         /// </summary>
-        /// <param name="propKey">The <see cref="PROPERTYKEY"/> for which the description is to be retrieved.</param>
+        /// <param name="propKey">The <see cref="PropertyKey"/> for which the description is to be retrieved.</param>
         /// <returns>A <see cref="PropertyDescription"/>. Null if the PROPERTYKEY does not have a registered description.</returns>
-        public PropertyDescription GetPropertyDescription(PROPERTYKEY propKey)
+        public PropertyDescription GetPropertyDescription(PropertyKey propKey)
         {
             Int32 hResult;
             Guid IID_IPropertyDescription = typeof(PropertyStoreInterop.IPropertyDescription).GUID;
@@ -381,10 +382,10 @@ namespace WinShell
             }
         }
 
-        public PROPERTYKEY GetPropertyKeyByName(string canonicalName)
+        public PropertyKey GetPropertyKeyByName(string canonicalName)
         {
             Int32 hResult;
-            PROPERTYKEY propertyKey;    // Initializes automatically to all zeros
+            PropertyKey propertyKey;    // Initializes automatically to all zeros
 
             Guid IID_IPropertyDescription = typeof(PropertyStoreInterop.IPropertyDescription).GUID;
             PropertyStoreInterop.IPropertyDescription iPropertyDescription = null;
@@ -459,7 +460,7 @@ namespace WinShell
     /// </summary>
     public class PropertyDescription
     {
-        PROPERTYKEY m_propertyKey;
+        PropertyKey m_propertyKey;
         string m_canonicalName;
         string m_displayName;
         PROPDESC_TYPE_FLAGS m_typeFlags;
@@ -469,14 +470,14 @@ namespace WinShell
 #if !RAW_PROPERTY_STORE
         // These properties should be marked as innate or read-only but, at least in Windows 10,
         // they are not. If not RAW_PROPERTY_STORE compile-time option then we modify them.
-        static HashSet<PROPERTYKEY> s_ForceInnate = new HashSet<PROPERTYKEY>(
-            new PROPERTYKEY[]
+        static HashSet<PropertyKey> s_ForceInnate = new HashSet<PropertyKey>(
+            new PropertyKey[]
             {
-                new PROPERTYKEY("D5CDD502-2E9C-101B-9397-08002B2CF9AE", 26), // System.ContentType
-                new PROPERTYKEY("D6942081-D53B-443D-AD47-5E059D9CD27A", 2), // System.Shell.SFGAOFlagsStrings
-                new PROPERTYKEY("09329b74-40a3-4c68-bf07-af9a572f607c", 100), // System.IsFolder
-                new PROPERTYKEY("14b81da1-0135-4d31-96d9-6cbfc9671a99", 18258), // System.DateImported
-                new PROPERTYKEY("2e4b640d-5019-46d8-8881-55414cc5caa0", 100) // System.Media.DateEncoded
+                new PropertyKey("D5CDD502-2E9C-101B-9397-08002B2CF9AE", 26), // System.ContentType
+                new PropertyKey("D6942081-D53B-443D-AD47-5E059D9CD27A", 2), // System.Shell.SFGAOFlagsStrings
+                new PropertyKey("09329b74-40a3-4c68-bf07-af9a572f607c", 100), // System.IsFolder
+                new PropertyKey("14b81da1-0135-4d31-96d9-6cbfc9671a99", 18258), // System.DateImported
+                new PropertyKey("2e4b640d-5019-46d8-8881-55414cc5caa0", 100) // System.Media.DateEncoded
     });
 #endif
 
@@ -579,9 +580,9 @@ namespace WinShell
         }
 
         /// <summary>
-        /// The <see cref="PROPERTYKEY"/> that identifies the property.
+        /// The <see cref="WinShell.PropertyKey"/> that identifies the property.
         /// </summary>
-        public PROPERTYKEY PropertyKey
+        public PropertyKey PropertyKey
         {
             get { return m_propertyKey; }
         }
@@ -834,49 +835,6 @@ namespace WinShell
         */
     } // class PropertyDescription
 
-    [StructLayout (LayoutKind.Sequential, Pack = 4)]
-    public struct PROPERTYKEY
-    {
-        public Guid fmtid;
-        public UInt32 pid;
-
-        public PROPERTYKEY(Guid guid, UInt32 propertyId)
-        {
-            fmtid = guid;
-            pid = propertyId;
-        }
-
-        public PROPERTYKEY(string guid, UInt32 propertyId)
-        {
-            fmtid = new Guid(guid);
-            pid = propertyId;
-        }
-
-        public bool Equals(PROPERTYKEY pk)
-        {
-            return fmtid.Equals(pk.fmtid) && pid == pk.pid;
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (obj is PROPERTYKEY)
-            {
-                return Equals((PROPERTYKEY)obj);
-            }
-            return false;
-        }
-
-        public override int GetHashCode()
-        {
-            return fmtid.GetHashCode() ^ pid.GetHashCode();
-        }
-
-        public override string ToString()
-        {
-            return string.Concat("(", fmtid.ToString(), ",", pid.ToString(), ")");
-        }
-    } // struct PROPERTYKEY
-
     /// <summary>
     /// Declares the values of the <see cref="PropertyDescription.TypeFlags"/> property.
     /// </summary>
@@ -945,11 +903,11 @@ namespace WinShell
         {
             void GetCount([Out] out uint cProps);
 
-            void GetAt([In] uint iProp, out PROPERTYKEY pkey);
+            void GetAt([In] uint iProp, out PropertyKey pkey);
 
-            void GetValue([In] ref PROPERTYKEY key, [In] IntPtr pv);
+            void GetValue([In] ref PropertyKey key, [In] IntPtr pv);
 
-            void SetValue([In] ref PROPERTYKEY key, [In] IntPtr pv);
+            void SetValue([In] ref PropertyKey key, [In] IntPtr pv);
 
             void Commit();
         }
@@ -966,7 +924,7 @@ namespace WinShell
         public interface IPropertyStoreCapabilities
         {
             [PreserveSig]
-            Int32 IsPropertyWritable([In] ref PROPERTYKEY pkey);
+            Int32 IsPropertyWritable([In] ref PropertyKey pkey);
         }
 
         /*
@@ -1022,7 +980,7 @@ namespace WinShell
         public interface IPropertySystem
         {
             [PreserveSig]
-            Int32 GetPropertyDescription([In] ref PROPERTYKEY propkey, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
+            Int32 GetPropertyDescription([In] ref PropertyKey propkey, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
 
             [PreserveSig]
             Int32 GetPropertyDescriptionByName([In][MarshalAs(UnmanagedType.LPWStr)] string pszCanonicalName, [In] ref Guid riid, [Out] out IPropertyDescription rPropertyDescription);
@@ -1114,7 +1072,7 @@ namespace WinShell
         public interface IPropertyDescription
         {
             [PreserveSig]
-            Int32 GetPropertyKey([Out] out PROPERTYKEY pkey);
+            Int32 GetPropertyKey([Out] out PropertyKey pkey);
 
             [PreserveSig]
             Int32 GetCanonicalName([Out] out IntPtr ppszName);
