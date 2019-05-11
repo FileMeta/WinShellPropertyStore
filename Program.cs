@@ -246,7 +246,7 @@ namespace Tests
                             if (desc == null) continue; // Don't copy properties without descriptions
 
                             // Only copy if the property is not innate, type is supported, and not read only.
-                            if (!desc.ValueTypeIsSupported)
+                            if (desc.ValueType == null)
                             {
                                 Console.WriteLine("Property '{0}' value type is not supported.", desc.CanonicalName);
                             }
@@ -314,7 +314,7 @@ namespace Tests
                             if (desc == null) continue; // Don't compare properties without descriptions
 
                             // Only compare if the property is not innate
-                            if (desc.ValueTypeIsSupported
+                            if (desc.ValueType != null
                                 && (desc.TypeFlags & PROPDESC_TYPE_FLAGS.PDTF_ISINNATE) == 0
                                 && dstPs.IsPropertyWriteable(propKey))
                             {
