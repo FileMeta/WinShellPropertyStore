@@ -3,9 +3,9 @@
 name: WinShellPropertyStore.cs
 description: C# Wrapper for Windows Property System
 url: https://github.com/FileMeta/WinShellPropertyStore/raw/master/WinShellPropertyStore.cs
-version: 1.8
+version: 1.9
 keywords: CodeBit
-dateModified: 2019-05-10
+dateModified: 2019-05-28
 license: http://unlicense.org
 dependsOn: https://github.com/FileMeta/WinShellPropertyStore/raw/master/PropVariant.cs https://github.com/FileMeta/WinShellPropertyStore/raw/master/PropertyKey.cs
 # Metadata in MicroYaml format. See http://filemeta.org and http://schema.org
@@ -347,6 +347,21 @@ namespace WinShell
                     iPropertyDescription = null;
                 }
             }
+        }
+
+        /// <summary>
+        /// Get the <see cref="PropertyStoreInterop.IPropertyDescription"/> for a particular <see cref="PropertyKey"/>.
+        /// </summary>
+        /// <param name="propKey">The <see cref="PropertyKey"/> for which the description is to be retrieved.</param>
+        /// <returns>A PropertyDescription. Null if the PROPERTYKEY does not have a registered description.</returns>
+        internal PropertyStoreInterop.IPropertyDescription GetRawPropertyDescription(PropertyKey propKey)
+        {
+            Int32 hResult;
+            Guid IID_IPropertyDescription = typeof(PropertyStoreInterop.IPropertyDescription).GUID;
+            PropertyStoreInterop.IPropertyDescription iPropertyDescription = null;
+            hResult = m_IPropertySystem.GetPropertyDescription(propKey, ref IID_IPropertyDescription, out iPropertyDescription);
+            if (hResult < 0) return null;
+            return iPropertyDescription;
         }
 
         /// <summary>
@@ -948,8 +963,52 @@ namespace WinShell
             [PreserveSig]
             Int32 GetViewFlags([Out] out PROPDESC_VIEW_FLAGS ppdtFlags);
 
+            [PreserveSig]
+            Int32 GetDefaultColumnWidth([Out] out int pcxChars);
+
+            [PreserveSig]
+            Int32 GetDisplayType([Out] out PROPDESC_DISPLAYTYPE pdisplaytype);
+
+            [PreserveSig]
+            Int32 GetColumnState([Out] out SHCOLSTATE pcsFlags);
+
+            [PreserveSig]
+            Int32 GetGroupingRange([Out] out PROPDESC_GROUPING_RANGE pgr);
+
+            [PreserveSig]
+            Int32 GetRelativeDescriptionType([Out] out PROPDESC_RELATIVEDESCRIPTION_TYPE prdt);
+
+            [PreserveSig]
+            Int32 GetRelativeDescription([In] IntPtr propvar1, [In] IntPtr propvar2, [Out] out IntPtr ppszDesc1, [Out] out IntPtr ppszDesc2);
+
+            [PreserveSig]
+            Int32 GetSortDescription([Out] out PROPDESC_SORTDESCRIPTION psd);
+
+            [PreserveSig]
+            Int32 GetSortDescriptionLabel(int fDescending, [Out] out IntPtr ppszLabel);
+
+            [PreserveSig]
+            Int32 GetAggregationType([Out] out PROPDESC_AGGREGATION_TYPE paggtype);
+
+            [PreserveSig]
+            Int32 GetConditionType([Out] out PROPDESC_CONDITION_TYPE pcontype, [Out] out CONDITION_OPERATION popDefault);
+
+            //[PreserveSig]
+            //Int32 GetEnumTypeList([In] ref Guid riid, [Out] out IPropertyEnumTypeList ppv);
+
             // === All Other Methods Deferred Until Later! ===
         }
+
+        [DllImport("shell32.dll", SetLastError = true, CallingConvention = CallingConvention.StdCall, PreserveSig = false)]
+        public static extern void SHGetPropertyStoreFromParsingName(
+                [In][MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+                [In] IntPtr zeroWorks,
+                [In] GETPROPERTYSTOREFLAGS flags,
+                [In] ref Guid iIdPropStore,
+                [Out] out IPropertyStore propertyStore);
+
+        [DllImport("propsys.dll", SetLastError = true, CallingConvention = CallingConvention.StdCall, PreserveSig = false)]
+        public static extern void PSGetPropertySystem([In] ref Guid iIdPropertySystem, [Out] out IPropertySystem propertySystem);
 
         [Flags]
         public enum GETPROPERTYSTOREFLAGS : uint
@@ -977,16 +1036,115 @@ namespace WinShell
             GPS_MASK_VALID = 0x000000FF,
         }
 
-        [DllImport("shell32.dll", SetLastError = true, CallingConvention = CallingConvention.StdCall, PreserveSig = false)]
-        public static extern void SHGetPropertyStoreFromParsingName(
-                [In][MarshalAs(UnmanagedType.LPWStr)] string pszPath,
-                [In] IntPtr zeroWorks,
-                [In] GETPROPERTYSTOREFLAGS flags,
-                [In] ref Guid iIdPropStore,
-                [Out] out IPropertyStore propertyStore);
+        public enum PROPDESC_DISPLAYTYPE : int
+        {
+            PDDT_STRING = 0,
+            PDDT_NUMBER = 1,
+            PDDT_BOOLEAN = 2,
+            PDDT_DATETIME = 3,
+            PDDT_ENUMERATED = 4,    // Use GetEnumTypeList
+        }
 
-        [DllImport("propsys.dll", SetLastError = true, CallingConvention = CallingConvention.StdCall, PreserveSig = false)]
-        public static extern void PSGetPropertySystem([In] ref Guid iIdPropertySystem, [Out] out IPropertySystem propertySystem);
+        [Flags]
+        public enum SHCOLSTATE : int
+        {
+            SHCOLSTATE_DEFAULT = 0x00000000,
+            SHCOLSTATE_TYPE_STR = 0x00000001,
+            SHCOLSTATE_TYPE_INT = 0x00000002,
+            SHCOLSTATE_TYPE_DATE = 0x00000003,
+            //SHCOLSTATE_TYPEMASK = 0x0000000F,
+            SHCOLSTATE_ONBYDEFAULT = 0x00000010,   // should on by default in details view
+            SHCOLSTATE_SLOW = 0x00000020,   // will be slow to compute, do on a background thread
+            SHCOLSTATE_EXTENDED = 0x00000040,   // provided by a handler, not the folder
+            SHCOLSTATE_SECONDARYUI = 0x00000080,   // not displayed in context menu, but listed in the "More..." dialog
+            SHCOLSTATE_HIDDEN = 0x00000100,   // not displayed in the UI
+            SHCOLSTATE_PREFER_VARCMP = 0x00000200,   // VarCmp() (with folderness test) produces same result as CompareIDs()
+            SHCOLSTATE_PREFER_FMTCMP = 0x00000400,   // comparison of PSFormatForDisplay result produces same result as CompareIDs()
+            SHCOLSTATE_NOSORTBYFOLDERNESS = 0x00000800,   // do not sort folders separately
+            SHCOLSTATE_VIEWONLY = 0x00010000,   // only displayed in the UI
+            SHCOLSTATE_BATCHREAD = 0x00020000,   // marks columns with values that should be read in a batch
+            SHCOLSTATE_NO_GROUPBY = 0x00040000,   // grouping is disabled for this column
+            SHCOLSTATE_FIXED_WIDTH = 0x00001000,   // Can't resize the column
+            SHCOLSTATE_NODPISCALE = 0x00002000,   // Width is the same in all DPIs
+            SHCOLSTATE_FIXED_RATIO = 0x00004000,   // Fixed width augments with height
+                                                   //SHCOLSTATE_DISPLAYMASK = 0x0000F000,   // To filter out new display flags
+        }
+
+        public enum PROPDESC_GROUPING_RANGE : int
+        {
+            PDGR_DISCRETE = 0,    // Display individual values
+            PDGR_ALPHANUMERIC = 1,    // Display static alphanumeric ranges for values
+            PDGR_SIZE = 2,    // Display static size ranges for values
+            PDGR_DYNAMIC = 3,    // Display dynamically created ranges for the values
+            PDGR_DATE = 4,    // Display month/year groups
+            PDGR_PERCENT = 5,    // Display percent buckets
+            PDGR_ENUMERATED = 6,    // Display buckets from GetEnumTypeList
+        }
+
+        public enum PROPDESC_RELATIVEDESCRIPTION_TYPE : int
+        {
+            PDRDT_GENERAL = 0,
+            PDRDT_DATE = 1,
+            PDRDT_SIZE = 2,
+            PDRDT_COUNT = 3,
+            PDRDT_REVISION = 4,
+            PDRDT_LENGTH = 5,
+            PDRDT_DURATION = 6,
+            PDRDT_SPEED = 7,
+            PDRDT_RATE = 8,
+            PDRDT_RATING = 9,
+            PDRDT_PRIORITY = 10,
+        }
+
+        public enum PROPDESC_SORTDESCRIPTION : int
+        {
+            PDSD_GENERAL = 0,
+            PDSD_A_Z = 1,
+            PDSD_LOWEST_HIGHEST = 2,
+            PDSD_SMALLEST_BIGGEST = 3,
+            PDSD_OLDEST_NEWEST = 4,
+        }
+
+        public enum PROPDESC_AGGREGATION_TYPE : int
+        {
+            PDAT_DEFAULT = 0,    // Display "multiple-values"
+            PDAT_FIRST = 1,    // Display first property value in the selection.
+            PDAT_SUM = 2,    // Display the numerical sum of the values. This is never returned for VT_LPWSTR, VT_BOOL, and VT_FILETIME types.
+            PDAT_AVERAGE = 3,    // Display the numerical average of the values. This is never returned for VT_LPWSTR, VT_BOOL, and VT_FILETIME types.
+            PDAT_DATERANGE = 4,    // Display the date range of the values. This is only returned for VT_FILETIME types.
+            PDAT_UNION = 5,    // Display values as union of all values. The order is undefined.
+            PDAT_MAX = 6,    // Displays the maximum of all the values.
+            PDAT_MIN = 7,    // Displays the minimum of all the values.
+        }
+
+        public enum PROPDESC_CONDITION_TYPE : int
+        {
+            PDCOT_NONE = 0,
+            PDCOT_STRING = 1,
+            PDCOT_SIZE = 2,
+            PDCOT_DATETIME = 3,
+            PDCOT_BOOLEAN = 4,
+            PDCOT_NUMBER = 5,
+        }
+
+        public enum CONDITION_OPERATION : int
+        {
+            COP_IMPLICIT,
+            COP_EQUAL,
+            COP_NOTEQUAL,
+            COP_LESSTHAN,
+            COP_GREATERTHAN,
+            COP_LESSTHANOREQUAL,
+            COP_GREATERTHANOREQUAL,
+            COP_VALUE_STARTSWITH,     // LIKE FOO%
+            COP_VALUE_ENDSWITH,       // LIKE %FOO
+            COP_VALUE_CONTAINS,       // LIKE %FOO%
+            COP_VALUE_NOTCONTAINS,    // NOT LIKE %FOO%
+            COP_DOSWILDCARDS,         // "DOS wildcards" and the like
+            COP_WORD_EQUAL,           // Contains a word/phrase somewhere.
+            COP_WORD_STARTSWITH,      // Contains a word/phrase beginning with this
+            COP_APPLICATION_SPECIFIC, // Application specific, presumably uses the Value.
+        }
 
     } // class PropertyStoreInterop
 
